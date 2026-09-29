@@ -1,0 +1,141 @@
+# ==============================================================================
+# PYTHON STANDARD
+# ==============================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Inline documentation / Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+docs/_build/
+
+# Testing and profiling
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Logging
+*.log
+pip-log.txt
+
+# ==============================================================================
+# JUPYTER NOTEBOOKS & IDEs
+# ==============================================================================
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# VS Code and PyCharm settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# ==============================================================================
+# MACHINE LEARNING & DEEP LEARNING (Large Files & Weights)
+# ==============================================================================
+# Model checkpoints, saved models, and weights
+*.h5
+*.hdf5
+*.pth
+*.pt
+*.onnx
+*.pb
+*.tflite
+*.pkl
+*.pickle
+*.joblib
+*.ckpt
+checkpoint
+
+# TensorBoard logs
+logs/
+tensorboard/
+
+# Hugging Face cache
+.cache/huggingface/
+
+# ==============================================================================
+# COMPUTER VISION SPECIFIC (Datasets & Media)
+# ==============================================================================
+# Raw datasets (Images, Videos, Annotations)
+# Add your local data directory name here if it varies (e.g., data/, dataset/)
+data/
+datasets/
+
+# Common image formats (if stored loosely)
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tiff
+*.gif
+
+# Common video formats
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# Annotations & Labeling files
+*.json
+*.xml
+*.csv
+*.yaml
+*.yml
+*.txt
+# Exception: You might want to track configuration text files. 
+# If so, negate them like this: !config.yaml
+
+# OpenCV / GUI window configurations
+window_settings.xml
