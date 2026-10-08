@@ -141,3 +141,5 @@ datasets/
 window_settings.xml
 
 !diagram/**
+
+output/**
