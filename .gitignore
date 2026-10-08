@@ -139,3 +139,5 @@ datasets/
 
 # OpenCV / GUI window configurations
 window_settings.xml
+
+!diagram/**
