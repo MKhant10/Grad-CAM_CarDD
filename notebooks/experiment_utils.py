@@ -26,27 +26,86 @@ def save_json(path, value):
 
 
 def load_manifest(path, split=None):
-    """Read and validate crop metadata; preserve CSV row order."""
+    """Load a square-crop manifest, allowing external-padding coordinates."""
     df = pd.read_csv(path)
-    required = {'sample_id', 'split', 'image_id', 'annotation_id', 'source_path',
-                'category_id', 'category', 'class_index', 'left', 'top', 'right', 'bottom',
-                'crop_width', 'crop_height', 'padding_fraction_per_side'}
-    if missing := required - set(df.columns):
-        raise ValueError(f'Missing manifest columns: {sorted(missing)}')
-    if df[list(required)].isna().any().any() or not df.sample_id.is_unique:
-        raise ValueError('Manifest has missing values or duplicate sample IDs.')
-    if not set(df.split).issubset(SPLIT_FOLDERS):
-        raise ValueError('Unknown dataset split.')
-    geometry = df[['left', 'top', 'right', 'bottom', 'crop_width', 'crop_height']]
-    if not np.isfinite(geometry.to_numpy()).all() or not (geometry == np.floor(geometry)).all().all():
-        raise ValueError('Crop coordinates must be finite integers.')
-    if ((df.left < 0) | (df.top < 0) | (df.right <= df.left) | (df.bottom <= df.top)
-        | (df.crop_width != df.right - df.left) | (df.crop_height != df.bottom - df.top)).any():
-        raise ValueError('Invalid crop geometry.')
-    if not all(0 <= i < len(CLASS_NAMES) and CLASS_NAMES[int(i)] == c and i == int(i)
-               for i, c in zip(df.class_index, df.category)):
-        raise ValueError('Class order differs from CLASS_NAMES.')
-    return df.loc[df.split == split].reset_index(drop=True) if split else df.reset_index(drop=True)
+
+    required = {
+        "sample_id", "split", "image_id", "annotation_id", "source_path",
+        "category_id", "category", "class_index",
+        "left", "top", "right", "bottom",
+        "crop_width", "crop_height", "padding_fraction_per_side",
+    }
+
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing manifest columns: {sorted(missing)}")
+
+    if df.empty:
+        raise ValueError("The manifest is empty.")
+
+    if df[list(required)].isna().any().any():
+        raise ValueError("Manifest contains missing values.")
+
+    if not df["sample_id"].is_unique:
+        raise ValueError("Manifest contains duplicate sample IDs.")
+
+    if not set(df["split"]).issubset(SPLIT_FOLDERS):
+        raise ValueError("Unknown dataset split.")
+
+    integer_columns = [
+        "image_id", "annotation_id", "category_id", "class_index",
+        "left", "top", "right", "bottom",
+        "crop_width", "crop_height",
+    ]
+
+    for column in integer_columns:
+        values = pd.to_numeric(df[column], errors="raise")
+        array = values.to_numpy(dtype=float)
+
+        if (
+            not np.isfinite(array).all()
+            or not (array == np.floor(array)).all()
+        ):
+            raise ValueError(f"{column} must contain finite integers.")
+
+        df[column] = values.astype("int64")
+
+    # Negative left/top and out-of-image right/bottom are permitted.
+    invalid_geometry = (
+        (df["crop_width"] <= 0)
+        | (df["crop_height"] <= 0)
+        | (df["crop_width"] != df["right"] - df["left"])
+        | (df["crop_height"] != df["bottom"] - df["top"])
+        | (df["crop_width"] != df["crop_height"])
+    )
+
+    if invalid_geometry.any():
+        examples = df.loc[invalid_geometry, "sample_id"].head().tolist()
+        raise ValueError(f"Invalid square-crop geometry: {examples}")
+
+    padding = pd.to_numeric(
+        df["padding_fraction_per_side"], errors="raise"
+    )
+    if not np.isfinite(padding.to_numpy(dtype=float)).all() or (padding < 0).any():
+        raise ValueError("Padding must be finite and nonnegative.")
+
+    df["padding_fraction_per_side"] = padding
+
+    valid_classes = [
+        0 <= index < len(CLASS_NAMES)
+        and CLASS_NAMES[index] == category
+        for index, category in zip(df["class_index"], df["category"])
+    ]
+
+    if not all(valid_classes):
+        raise ValueError("Class order differs from CLASS_NAMES.")
+
+    if split is not None:
+        if split not in SPLIT_FOLDERS:
+            raise ValueError(f"Unknown split: {split}")
+        df = df.loc[df["split"] == split]
+
+    return df.reset_index(drop=True)
 
 
 def load_annotations(data_dir, splits=('train', 'val', 'test')):
@@ -56,24 +115,85 @@ def load_annotations(data_dir, splits=('train', 'val', 'test')):
 
 
 def load_crop(row):
-    """Return uint8 RGB crop without resizing or normalization."""
-    box = tuple(int(row[k]) for k in ('left', 'top', 'right', 'bottom'))
-    with Image.open(row['source_path']) as image:
-        if box[2] > image.width or box[3] > image.height:
-            raise ValueError(f'Crop exceeds image bounds: {row["sample_id"]}')
-        return np.asarray(image.convert('RGB').crop(box))
+    """Return a native-resolution RGB square with black external padding."""
+    left, top, right, bottom = (
+        int(row[key]) for key in ("left", "top", "right", "bottom")
+    )
+
+    expected_shape = (
+        int(row["crop_height"]),
+        int(row["crop_width"]),
+    )
+
+    if (
+        right - left != expected_shape[1]
+        or bottom - top != expected_shape[0]
+        or expected_shape[0] != expected_shape[1]
+        or expected_shape[0] <= 0
+    ):
+        raise ValueError(f"Invalid square crop: {row['sample_id']}")
+
+    with Image.open(row["source_path"]) as image:
+        if (
+            left >= image.width
+            or top >= image.height
+            or right <= 0
+            or bottom <= 0
+        ):
+            raise ValueError(
+                f"Crop does not overlap the image: {row['sample_id']}"
+            )
+
+        # Pillow fills out-of-image areas with black for RGB images.
+        crop = np.asarray(
+            image.convert("RGB").crop((left, top, right, bottom))
+        )
+
+    if crop.shape != (*expected_shape, 3):
+        raise ValueError(f"Unexpected crop shape: {row['sample_id']}")
+
+    return crop
 
 
 def load_damage_mask(row, annotations):
-    """Decode the selected instance, then crop with identical image coordinates."""
-    coco = annotations[row['split']]
-    ann = coco.anns[int(row['annotation_id'])]
-    if ann['image_id'] != int(row['image_id']) or ann['category_id'] != int(row['category_id']):
-        raise ValueError(f'Annotation mismatch: {row["sample_id"]}')
-    mask = coco.annToMask(ann)[int(row['top']):int(row['bottom']),
-                              int(row['left']):int(row['right'])].astype(bool)
-    if mask.shape != (int(row['crop_height']), int(row['crop_width'])) or not mask.any():
-        raise ValueError(f'Empty or misaligned damage mask: {row["sample_id"]}')
+    """Crop the selected instance mask with matching zero external padding."""
+    coco = annotations[row["split"]]
+    ann = coco.anns[int(row["annotation_id"])]
+
+    if (
+        ann["image_id"] != int(row["image_id"])
+        or ann["category_id"] != int(row["category_id"])
+    ):
+        raise ValueError(f"Annotation mismatch: {row['sample_id']}")
+
+    box = tuple(
+        int(row[key]) for key in ("left", "top", "right", "bottom")
+    )
+
+    full_mask = coco.annToMask(ann).astype(np.uint8)
+
+    # Use the same coordinates as the RGB crop.
+    # Pillow fills out-of-image mask areas with zero.
+    mask = np.asarray(
+        Image.fromarray(full_mask).crop(box)
+    ).astype(bool)
+
+    expected_shape = (
+        int(row["crop_height"]),
+        int(row["crop_width"]),
+    )
+
+    if mask.shape != expected_shape or not mask.any():
+        raise ValueError(
+            f"Empty or misaligned damage mask: {row['sample_id']}"
+        )
+
+    # Square cropping should retain the entire selected damage instance.
+    if np.count_nonzero(mask) != np.count_nonzero(full_mask):
+        raise ValueError(
+            f"Crop excludes part of the damage mask: {row['sample_id']}"
+        )
+
     return mask
 
 
