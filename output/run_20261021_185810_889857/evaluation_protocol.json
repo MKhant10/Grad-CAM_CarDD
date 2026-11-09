@@ -1,0 +1,18 @@
+{
+  "selected_threshold": 0.25,
+  "selection_split": "val",
+  "selection_metric": "mean sample IoU",
+  "tie_break": "lower threshold",
+  "top_five_thresholds": [
+    0.25,
+    0.2,
+    0.3,
+    0.15,
+    0.1
+  ],
+  "target_mode": "ground_truth",
+  "layer_name": "conv5_block3_out",
+  "localization_resolution": "original crop",
+  "invalid_heatmaps": "IoU zero and pointing miss",
+  "pointing_ties": "first row-major maximum"
+}

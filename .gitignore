@@ -143,3 +143,13 @@ window_settings.xml
 !diagram/**
 
 output/**
+
+# Ignore model checkpoints by default
+*.keras
+
+# Allow the selected evaluation model
+!/output/run_20261021_185810_889857/
+!/output/run_20261021_185810_889857/best_model.keras
+!/output/run_20261021_185810_889857/training_config.json
+!/output/run_20261021_185810_889857/evaluation_protocol.json
+!/output/run_20261021_185810_889857/model_selection.json

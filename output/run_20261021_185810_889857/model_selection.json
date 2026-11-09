@@ -1,0 +1,5 @@
+{
+  "best_stage": "finetune",
+  "head_best_val_loss": 0.5182304978370667,
+  "finetune_best_val_loss": 0.49405184388160706
+}
